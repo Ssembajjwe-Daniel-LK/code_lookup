@@ -1,6 +1,7 @@
 // The main screen: search field, history chips, result list.
 // (Was LookupPage in main.dart before hour 6.)
 
+import 'dart:async'; 
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -41,6 +42,11 @@ class _SearchScreenState extends State<SearchScreen> {
   List<SearchHit>? _hits; // parsed hits
   String _lastQuery = ''; // for highlighting
 
+  // Hour 4: search as you type.
+  static const _debounceDelay = Duration(milliseconds: 400);
+  Timer? _debounce; // waits until the user stops typing
+  int _requestId = 0; // counts searches, to ignore outdated answers
+
   // Search history, saved in the browser / on the device.
   static const _historyKey = 'search_history';
   List<String> _history = [];
@@ -64,6 +70,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   void dispose() {
+    _debounce?.cancel(); // a timer must not fire after the screen is gone
     _controller.dispose();
     _client.close();
     super.dispose();
@@ -121,9 +128,25 @@ class _SearchScreenState extends State<SearchScreen> {
 
   // ---------- search ----------
 
-  Future<void> _search() async {
+  /// Hour 4: called on every keystroke. Each keystroke cancels the previous
+  /// timer and starts a new one, so the search only runs when the user has
+  /// stopped typing for 400 ms ("debounce").
+  void _onTextChanged(String text) {
+    _debounce?.cancel();
+    if (text.trim().length < 2) return; // too short to search
+    _debounce = Timer(_debounceDelay, () => _search(saveHistory: false));
+  }
+
+  /// [saveHistory]: only searches the user really "sent" (Enter, button,
+  /// chip) go into the history, not every half-typed word.
+  Future<void> _search({bool saveHistory = true}) async {
+    _debounce?.cancel(); // Enter/button: no extra timer search afterwards
     final query = _controller.text.trim();
     if (query.isEmpty) return;
+
+    // Every search gets a number. If a newer search started while this one
+    // was waiting for the server, this answer is outdated and is ignored.
+    final myId = ++_requestId;
 
     setState(() {
       _loading = true;
@@ -138,16 +161,19 @@ class _SearchScreenState extends State<SearchScreen> {
         toolName,
         isCodeMode ? {'code': query} : {'query': query},
       );
+      if (myId != _requestId || !mounted) return; // outdated -> ignore
       final hits = _parseHits(text);
       setState(() {
         _hits = hits;
         if (hits == null) _result = _prettyJson(text);
       });
-      _addToHistory(query); // only successful searches are saved
+      if (saveHistory) _addToHistory(query);
     } catch (e) {
+      if (myId != _requestId || !mounted) return;
       setState(() => _error = e.toString());
     } finally {
-      setState(() => _loading = false);
+      // only the newest search may switch the spinner off
+      if (myId == _requestId && mounted) setState(() => _loading = false);
     }
   }
 
@@ -198,10 +224,8 @@ class _SearchScreenState extends State<SearchScreen> {
           children: [
             _buildSearchRow(),
             const SizedBox(height: 8),
-            Text(
-              'Server: ${widget.serverUrl}',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            Text('Server: ${widget.serverUrl}',
+                style: Theme.of(context).textTheme.bodySmall),
             if (_history.isNotEmpty) ...[
               const SizedBox(height: 8),
               _buildHistory(),
@@ -226,12 +250,13 @@ class _SearchScreenState extends State<SearchScreen> {
                   : 'Search documents (e.g. Display flackert)',
               border: OutlineInputBorder(),
             ),
-            onSubmitted: (_) => _search(),
+            onChanged: _onTextChanged, // Hour 4: every keystroke
+            onSubmitted: (_) => _search(), // Enter: search now + history
           ),
         ),
         const SizedBox(width: 12),
         FilledButton.icon(
-          onPressed: _loading ? null : _search,
+          onPressed: _loading ? null : () => _search(),
           icon: const Icon(Icons.search),
           label: const Text('Search'),
         ),
