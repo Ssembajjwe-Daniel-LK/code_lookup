@@ -30,7 +30,7 @@ class McpException implements Exception {
 
 class McpClient {
   McpClient(this.endpoint, {http.Client? httpClient})
-      : _http = httpClient ?? http.Client();
+    : _http = httpClient ?? http.Client();
 
   final Uri endpoint;
   final http.Client _http;
@@ -41,12 +41,12 @@ class McpClient {
   int _nextId = 1;
 
   Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        // Streamable HTTP: the server may answer with plain JSON OR with SSE.
-        'Accept': 'application/json, text/event-stream',
-        'Mcp-Session-Id': ?_sessionId, // only added if not null,
-        if (_initialized) 'MCP-Protocol-Version': _protocolVersion,
-      };
+    'Content-Type': 'application/json',
+    // Streamable HTTP: the server may answer with plain JSON OR with SSE.
+    'Accept': 'application/json, text/event-stream',
+    'Mcp-Session-Id': ?_sessionId, // only added if not null
+    if (_initialized) 'MCP-Protocol-Version': _protocolVersion,
+  };
 
   /// Sends one JSON-RPC message. Returns the "result" object,
   /// or null for notifications (which get no answer).
@@ -67,8 +67,10 @@ class McpClient {
     final text = utf8.decode(res.bodyBytes);
 
     if (res.statusCode != 200) {
-      throw McpException('HTTP ${res.statusCode}: $text',
-          statusCode: res.statusCode);
+      throw McpException(
+        'HTTP ${res.statusCode}: $text',
+        statusCode: res.statusCode,
+      );
     }
 
     final contentType = res.headers['content-type'] ?? '';
@@ -129,11 +131,11 @@ class McpClient {
     if (!_initialized) await initialize();
 
     Future<Map<String, dynamic>?> send() => _post({
-          'jsonrpc': '2.0',
-          'id': _nextId++,
-          'method': 'tools/call',
-          'params': {'name': name, 'arguments': arguments},
-        });
+      'jsonrpc': '2.0',
+      'id': _nextId++,
+      'method': 'tools/call',
+      'params': {'name': name, 'arguments': arguments},
+    });
 
     Map<String, dynamic>? result;
     try {

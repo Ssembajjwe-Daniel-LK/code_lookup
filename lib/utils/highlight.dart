@@ -1,4 +1,4 @@
-// Highlighting the search words in a text.
+// Hour 2: highlight the search words in a text.
 //
 // New concepts:
 //  - TextSpan: a piece of text with its own style. A TextSpan with

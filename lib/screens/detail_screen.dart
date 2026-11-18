@@ -1,6 +1,6 @@
 // Detail page for one search hit.
 //
-// Navigation - data comes in through the constructor; the AppBar back
+// Hour 1: navigation - data comes in through the constructor; the AppBar back
 //         arrow calls Navigator.pop automatically.
 // Hour 1 exercise: copy button in the AppBar.
 // Hour 2: the search words are highlighted in the full text.
@@ -8,8 +8,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'highlight.dart';
-import 'main.dart' show SearchHit;
+import 'package:code_lookup/utils/highlight.dart';
+import 'package:code_lookup/models/search_hit.dart';
 
 class DetailScreen extends StatelessWidget {
   const DetailScreen({super.key, required this.hit, this.query = ''});
@@ -31,9 +31,8 @@ class DetailScreen extends StatelessWidget {
             tooltip: 'Copy path',
             onPressed: () {
               Clipboard.setData(ClipboardData(text: hit.path));
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Path copied')),
-              );
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(const SnackBar(content: Text('Path copied')));
             },
           ),
         ],

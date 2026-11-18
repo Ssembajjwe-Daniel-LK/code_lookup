@@ -53,9 +53,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // validate() runs every validator in the Form and shows the error texts.
     if (!_formKey.currentState!.validate()) return;
     widget.onServerUrlChanged(_urlController.text.trim());
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Server URL saved')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Server URL saved')));
   }
 
   @override
