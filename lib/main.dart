@@ -298,7 +298,7 @@ class _LookupPageState extends State<LookupPage> {
                     decoration: const InputDecoration(
                       labelText: isCodeMode
                           ? 'Code (e.g. DMX-2001, KBX-104A)'
-                          : 'Search documents (e.g. Display flackert)',
+                          : 'Search documents',
                       border: OutlineInputBorder(),
                     ),
                     onSubmitted: (_) => _search(), // Enter key

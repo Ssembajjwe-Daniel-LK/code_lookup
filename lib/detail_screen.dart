@@ -1,6 +1,6 @@
 // Detail page for one search hit.
 //
-// Hour 1: navigation - data comes in through the constructor; the AppBar back
+// Navigation - data comes in through the constructor; the AppBar back
 //         arrow calls Navigator.pop automatically.
 // Hour 1 exercise: copy button in the AppBar.
 // Hour 2: the search words are highlighted in the full text.
