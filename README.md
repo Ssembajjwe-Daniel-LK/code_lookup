@@ -1,10 +1,34 @@
 # Code Lookup
 
 A small Flutter app that searches documents through an MCP server (Model Context Protocol).
-Includes a minimal Python MCP server that indexes a folder of `.docx`, `.pdf`, `.txt` and `.md` files.
+Includes a Python MCP server that indexes a folder of `.docx`, `.pdf`, `.txt` and `.md` files.
 
 ```
 Flutter app (Chrome)  ->  HTTP (MCP)  ->  server.py  ->  documents folder
+```
+
+## Features
+
+- Full-text search over a documents folder, results as cards with file, page and preview
+- Search words highlighted in results and on the detail page
+- Detail page with full text and a copy-path button
+- Search history (last 10, saved in the browser)
+- Settings: dark mode and server URL, both saved
+- MCP client in Dart (`lib/services/mcp_client.dart`)
+
+## Project structure
+
+```
+lib/
+  main.dart        app start, themes, settings
+  config.dart      constants
+  models/          SearchHit
+  services/        MCP client
+  screens/         search, detail, settings
+  widgets/         HitCard
+  utils/           highlighting
+server/            Python MCP server + demo data
+test/              unit and widget tests
 ```
 
 ## Requirements
@@ -12,7 +36,7 @@ Flutter app (Chrome)  ->  HTTP (MCP)  ->  server.py  ->  documents folder
 - [Flutter SDK](https://docs.flutter.dev/install) (3.47.8 or newer), with `flutter\bin` on your PATH
 - Chrome
 - Python 3.10+
-- Optional: Visual Studio 2022 with "Desktop development with C++" to build a Windows app
+
 
 ## Setup
 
@@ -51,7 +75,6 @@ flutter test
 
 ## Notes
 
-- The demo documents and codes are fictional.
-- `--cors` is needed for Chrome and only allows `localhost` origins.
-- Scanned PDFs without a text layer are skipped (no OCR).
-- Code lookup (`lookup_code`) is only available with the demo data: run without `--docs` and start the app with `--dart-define=TOOL=lookup_code`.
+- The documents and codes are fictional.
+- `--cors` is needed for Chrome and allows `localhost` origins.
+- Scanned PDFs without a text layer are skipped because OCR isn't part.

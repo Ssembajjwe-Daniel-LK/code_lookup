@@ -3,12 +3,17 @@
 // These tests only check the screen; they never call the server.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:code_lookup/main.dart';
+import 'package:code_lookup/models/search_hit.dart';
 
 void main() {
   testWidgets('start screen shows title, search field and hint',
       (WidgetTester tester) async {
+    // Tests have no browser storage: give shared_preferences an empty fake one.
+    SharedPreferences.setMockInitialValues({});
+
     await tester.pumpWidget(const CodeLookupApp());
 
     expect(find.text('Code Lookup'), findsOneWidget); // AppBar title
