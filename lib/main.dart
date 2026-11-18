@@ -9,8 +9,12 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'detail_screen.dart';
+import 'highlight.dart';
 import 'mcp_client.dart';
+import 'settings_screen.dart';
 
 // Read at build time from --dart-define, so no URL is hard-coded in the source.
 const String mcpUrl =
@@ -28,23 +32,80 @@ const Color themeRed = Color(0xFFD32F2F);
 
 void main() => runApp(const CodeLookupApp());
 
-class CodeLookupApp extends StatelessWidget {
+// Hour 5: the app itself is now Stateful, because it owns the settings that
+// several screens need (dark mode, server URL). "Lifting state up": the data
+// lives in the highest widget that needs it and flows down as parameters;
+// changes flow back up through callbacks (functions passed down).
+class CodeLookupApp extends StatefulWidget {
   const CodeLookupApp({super.key});
+
+  @override
+  State<CodeLookupApp> createState() => _CodeLookupAppState();
+}
+
+class _CodeLookupAppState extends State<CodeLookupApp> {
+  static const _darkKey = 'dark_mode';
+  static const _urlKey = 'server_url';
+
+  bool _isDark = false;
+  String _serverUrl = mcpUrl; // default from --dart-define
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _isDark = prefs.getBool(_darkKey) ?? false;
+      _serverUrl = prefs.getString(_urlKey) ?? mcpUrl;
+    });
+  }
+
+  Future<void> _setDark(bool value) async {
+    setState(() => _isDark = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_darkKey, value);
+  }
+
+  Future<void> _setServerUrl(String value) async {
+    setState(() => _serverUrl = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_urlKey, value);
+  }
+
+  // One function builds both themes, so light and dark only differ in brightness.
+  ThemeData _theme(Brightness brightness) => ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: themeBlue,
+          brightness: brightness,
+          secondary: themeRed,
+        ),
+        // AppBar stays dark blue with white text in both modes.
+        appBarTheme: const AppBarTheme(
+          backgroundColor: themeBlue,
+          foregroundColor: Colors.white,
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Code Lookup',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: themeBlue,
-          primary: themeBlue,
-          secondary: themeRed,
-        ),
+      theme: _theme(Brightness.light),
+      darkTheme: _theme(Brightness.dark),
+      themeMode: _isDark ? ThemeMode.dark : ThemeMode.light,
+      home: LookupPage(
+        serverUrl: _serverUrl,
+        isDark: _isDark,
+        onDarkChanged: _setDark,
+        onServerUrlChanged: _setServerUrl,
       ),
-      home: const LookupPage(),
     );
   }
 }
@@ -52,7 +113,19 @@ class CodeLookupApp extends StatelessWidget {
 // StatefulWidget = a widget with changing data (like a class with attributes
 // whose changes redraw the screen). The data lives in the State class below.
 class LookupPage extends StatefulWidget {
-  const LookupPage({super.key});
+  const LookupPage({
+    super.key,
+    required this.serverUrl,
+    required this.isDark,
+    required this.onDarkChanged,
+    required this.onServerUrlChanged,
+  });
+
+  final String serverUrl;
+  final bool isDark;
+  // ValueChanged<T> = a function that takes a T and returns nothing.
+  final ValueChanged<bool> onDarkChanged;
+  final ValueChanged<String> onServerUrlChanged;
 
   @override
   State<LookupPage> createState() => _LookupPageState();
@@ -60,12 +133,77 @@ class LookupPage extends StatefulWidget {
 
 class _LookupPageState extends State<LookupPage> {
   final _controller = TextEditingController();
-  final _client = McpClient(Uri.parse(mcpUrl));
+  // `late`: set in initState, not here, because it needs widget.serverUrl.
+  late McpClient _client;
 
   bool _loading = false;
   String? _error;
   String? _result; // raw text, shown only if the answer has no hit list
   List<SearchHit>? _hits; // parsed hits
+  String _lastQuery = ''; // Hour 2: what was searched, for highlighting
+
+  // Hour 3: search history, saved in the browser / on the device.
+  static const _historyKey = 'search_history';
+  List<String> _history = [];
+
+  // initState runs once, when the screen is created (like __init__ for the
+  // screen's lifetime). It can't be async itself, so it starts an async method.
+  @override
+  void initState() {
+    super.initState();
+    _client = McpClient(Uri.parse(widget.serverUrl));
+    _loadHistory();
+  }
+
+  // Hour 5: called when the parent rebuilds this widget with new parameters.
+  // If the server URL changed in the settings, connect to the new server.
+  @override
+  void didUpdateWidget(LookupPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.serverUrl != widget.serverUrl) {
+      _client.close();
+      _client = McpClient(Uri.parse(widget.serverUrl));
+    }
+  }
+
+  void _openSettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SettingsScreen(
+          isDark: widget.isDark,
+          serverUrl: widget.serverUrl,
+          onDarkChanged: widget.onDarkChanged,
+          onServerUrlChanged: widget.onServerUrlChanged,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _loadHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    // After an await the screen may already be gone -> check `mounted`.
+    if (!mounted) return;
+    setState(() => _history = prefs.getStringList(_historyKey) ?? []);
+  }
+
+  Future<void> _addToHistory(String query) async {
+    // Newest first, no duplicates (ignoring case), at most 10 entries.
+    final updated = [
+      query,
+      ..._history.where((h) => h.toLowerCase() != query.toLowerCase()),
+    ].take(10).toList();
+
+    setState(() => _history = updated);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_historyKey, updated);
+  }
+
+  Future<void> _clearHistory() async {
+    setState(() => _history = []);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_historyKey);
+  }
 
   @override
   void dispose() {
@@ -84,6 +222,7 @@ class _LookupPageState extends State<LookupPage> {
       _error = null;
       _result = null;
       _hits = null;
+      _lastQuery = code;
     });
 
     try {
@@ -96,6 +235,7 @@ class _LookupPageState extends State<LookupPage> {
         _hits = hits;
         if (hits == null) _result = _prettyJson(text);
       });
+      _addToHistory(code); // Hour 3: only successful searches are saved
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -136,8 +276,14 @@ class _LookupPageState extends State<LookupPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Code Lookup'),
-        backgroundColor: colors.primary,
-        foregroundColor: Colors.white,
+        // Colours now come from appBarTheme in CodeLookupApp.
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Settings',
+            onPressed: _openSettings,
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -167,7 +313,35 @@ class _LookupPageState extends State<LookupPage> {
               ],
             ),
             const SizedBox(height: 8),
-            Text('Server: $mcpUrl', style: Theme.of(context).textTheme.bodySmall),
+            Text('Server: ${widget.serverUrl}',
+                style: Theme.of(context).textTheme.bodySmall),
+
+            // Hour 3: history chips. "...[ ]" (spread) inserts several
+            // widgets at once, only if the condition is true.
+            if (_history.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  for (final q in _history)
+                    ActionChip(
+                      avatar: const Icon(Icons.history, size: 16),
+                      label: Text(q),
+                      onPressed: () {
+                        _controller.text = q;
+                        _search();
+                      },
+                    ),
+                  TextButton.icon(
+                    onPressed: _clearHistory,
+                    icon: const Icon(Icons.clear_all),
+                    label: const Text('Clear'),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 16),
             Expanded(child: _buildResultArea(colors)),
           ],
@@ -200,6 +374,14 @@ class _LookupPageState extends State<LookupPage> {
           final hit = hits[i];
           return Card(
             child: ListTile(
+              // Hour 1: open the detail page on tap.
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => DetailScreen(hit: hit, query: _lastQuery),
+                ),
+              ),
+              trailing: const Icon(Icons.chevron_right),
               leading: Icon(Icons.description, color: colors.primary),
               title: Text(hit.fileName,
                   style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -210,7 +392,12 @@ class _LookupPageState extends State<LookupPage> {
                       '${hit.score != null ? ' · Score ${hit.score}' : ''}'),
                   if (hit.text.isNotEmpty) ...[
                     const SizedBox(height: 4),
-                    Text(hit.snippet, maxLines: 4, overflow: TextOverflow.ellipsis),
+                    Text.rich(
+                      highlightSpans(hit.snippet, _lastQuery,
+                          color: colors.secondary),
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                   const SizedBox(height: 4),
                   SelectableText(hit.path,

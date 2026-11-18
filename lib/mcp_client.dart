@@ -44,7 +44,7 @@ class McpClient {
         'Content-Type': 'application/json',
         // Streamable HTTP: the server may answer with plain JSON OR with SSE.
         'Accept': 'application/json, text/event-stream',
-        if (_sessionId != null) 'Mcp-Session-Id': _sessionId!,
+        'Mcp-Session-Id': ?_sessionId, // only added if not null,
         if (_initialized) 'MCP-Protocol-Version': _protocolVersion,
       };
 
