@@ -1,7 +1,7 @@
 // The main screen: search field, history chips, result list.
 // (Was LookupPage in main.dart before hour 6.)
 
-import 'dart:async'; 
+import 'dart:async'; // Hour 4: Timer
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -239,28 +239,46 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildSearchRow() {
-    return Row(
-      children: [
-        Expanded(
-          child: TextField(
-            controller: _controller,
-            decoration: const InputDecoration(
-              labelText: isCodeMode
-                  ? 'Code (e.g. DMX-2001, KBX-104A)'
-                  : 'Search documents (e.g. Display flackert)',
-              border: OutlineInputBorder(),
+    // Hour 7: LayoutBuilder tells us how much width THIS part has
+    // (constraints.maxWidth), not the whole window. On a narrow screen the
+    // button shrinks to an icon so the text field keeps enough room.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < compactWidth;
+
+        return Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                decoration: InputDecoration(
+                  labelText: compact
+                      ? 'Search'
+                      : isCodeMode
+                          ? 'Code (e.g. DMX-2001, KBX-104A)'
+                          : 'Search documents (e.g. Display flackert)',
+                  border: const OutlineInputBorder(),
+                ),
+                onChanged: _onTextChanged, // Hour 4: every keystroke
+                onSubmitted: (_) => _search(), // Enter: search now + history
+              ),
             ),
-            onChanged: _onTextChanged, // Hour 4: every keystroke
-            onSubmitted: (_) => _search(), // Enter: search now + history
-          ),
-        ),
-        const SizedBox(width: 12),
-        FilledButton.icon(
-          onPressed: _loading ? null : () => _search(),
-          icon: const Icon(Icons.search),
-          label: const Text('Search'),
-        ),
-      ],
+            SizedBox(width: compact ? 8 : 12),
+            if (compact)
+              IconButton.filled(
+                onPressed: _loading ? null : () => _search(),
+                icon: const Icon(Icons.search),
+                tooltip: 'Search',
+              )
+            else
+              FilledButton.icon(
+                onPressed: _loading ? null : () => _search(),
+                icon: const Icon(Icons.search),
+                label: const Text('Search'),
+              ),
+          ],
+        );
+      },
     );
   }
 
