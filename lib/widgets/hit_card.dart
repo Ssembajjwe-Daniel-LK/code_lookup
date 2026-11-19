@@ -12,11 +12,13 @@ class HitCard extends StatelessWidget {
     required this.hit,
     required this.query,
     required this.onTap,
+    this.selected = false,
   });
 
   final SearchHit hit;
   final String query;
   final VoidCallback onTap; // a function with no parameters
+  final bool selected; // Hour 7: highlighted in the wide layout
 
   @override
   Widget build(BuildContext context) {
@@ -25,6 +27,8 @@ class HitCard extends StatelessWidget {
     return Card(
       child: ListTile(
         onTap: onTap,
+        selected: selected,
+        selectedTileColor: colors.secondaryContainer,
         trailing: const Icon(Icons.chevron_right),
         leading: Icon(Icons.description, color: colors.primary),
         title: Text(
@@ -34,10 +38,8 @@ class HitCard extends StatelessWidget {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Page ${hit.page}'
-              '${hit.score != null ? ' · Score ${hit.score}' : ''}',
-            ),
+            Text('Page ${hit.page}'
+                '${hit.score != null ? ' · Score ${hit.score}' : ''}'),
             if (hit.text.isNotEmpty) ...[
               const SizedBox(height: 4),
               Text.rich(
@@ -47,10 +49,7 @@ class HitCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 4),
-            SelectableText(
-              hit.path,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            SelectableText(hit.path, style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
       ),

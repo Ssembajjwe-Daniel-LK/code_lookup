@@ -1,10 +1,11 @@
 // The main screen: search field, history chips, result list.
-// (Was LookupPage in main.dart before hour 6.)
+// (Was LookupPage in main.dart before  the commit more code editing)
 
-import 'dart:async'; // Hour 4: Timer
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:code_lookup/config.dart';
@@ -12,6 +13,7 @@ import 'package:code_lookup/models/search_hit.dart';
 import 'package:code_lookup/screens/detail_screen.dart';
 import 'package:code_lookup/screens/settings_screen.dart';
 import 'package:code_lookup/services/mcp_client.dart';
+import 'package:code_lookup/widgets/detail_view.dart';
 import 'package:code_lookup/widgets/hit_card.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -41,6 +43,7 @@ class _SearchScreenState extends State<SearchScreen> {
   String? _result; // raw text, shown only if the answer has no hit list
   List<SearchHit>? _hits; // parsed hits
   String _lastQuery = ''; // for highlighting
+  SearchHit? _selected; // Hour 7: hit shown on the right (wide layout)
 
   // Hour 4: search as you type.
   static const _debounceDelay = Duration(milliseconds: 400);
@@ -153,6 +156,7 @@ class _SearchScreenState extends State<SearchScreen> {
       _error = null;
       _result = null;
       _hits = null;
+      _selected = null; // new search: nothing selected yet
       _lastQuery = query;
     });
 
@@ -306,6 +310,51 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  /// Hour 7: right side of the wide layout. Same DetailView as the detail
+  /// page, plus a small header with file name and copy button.
+  Widget _buildDetailPane() {
+    final hit = _selected;
+    if (hit == null) {
+      return const Center(child: Text('Select a hit on the left.'));
+    }
+
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.description),
+            title: Text(
+              hit.fileName,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            trailing: IconButton(
+              icon: const Icon(Icons.copy),
+              tooltip: 'Copy path',
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: hit.path));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Path copied')),
+                );
+              },
+            ),
+          ),
+          const Divider(height: 1),
+          // Expanded: DetailView is a ListView and needs a bounded height.
+          // The key makes Flutter build a fresh view (scrolled to the top)
+          // when another hit is selected.
+          Expanded(
+            child: DetailView(
+              key: ValueKey(hit),
+              hit: hit,
+              query: _lastQuery,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildResultArea() {
     final colors = Theme.of(context).colorScheme;
 
@@ -324,13 +373,37 @@ class _SearchScreenState extends State<SearchScreen> {
     final hits = _hits;
     if (hits != null) {
       if (hits.isEmpty) return const Center(child: Text('No hits.'));
-      return ListView.builder(
-        itemCount: hits.length,
-        itemBuilder: (context, i) => HitCard(
-          hit: hits[i],
-          query: _lastQuery,
-          onTap: () => _openDetail(hits[i]),
-        ),
+
+      // Hour 7, step 2: decide by the width of the result area.
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= wideWidth;
+
+          final list = ListView.builder(
+            itemCount: hits.length,
+            itemBuilder: (context, i) => HitCard(
+              hit: hits[i],
+              query: _lastQuery,
+              selected: wide && hits[i] == _selected,
+              // Wide: show the hit on the right. Narrow: open a new page.
+              onTap: wide
+                  ? () => setState(() => _selected = hits[i])
+                  : () => _openDetail(hits[i]),
+            ),
+          );
+
+          if (!wide) return list; // narrow: same as before
+
+          // Wide: list (2 parts) | divider | detail (3 parts)
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(flex: 2, child: list),
+              const VerticalDivider(width: 24),
+              Expanded(flex: 3, child: _buildDetailPane()),
+            ],
+          );
+        },
       );
     }
 
